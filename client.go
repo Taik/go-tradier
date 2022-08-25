@@ -105,7 +105,22 @@ func (tc *Client) GetAccountPositions() ([]*Position, error) {
 		}
 	}
 	err := tc.getJSON(url, &result)
-	return result.Positions.Position, err
+	if err == nil {
+		return result.Positions.Position, err
+	}
+
+	// Attempt to unmarshal again, but this time with a nested struct.
+	// This is a workaround for a bug in the Tradier API.
+	var resultSingle struct {
+		Positions struct {
+			Position *Position
+		}
+	}
+	err = tc.getJSON(url, &resultSingle)
+	if err != nil {
+		return nil, err
+	}
+	return []*Position{resultSingle.Positions.Position}, nil
 }
 
 func (tc *Client) GetAccountHistory(limit int) ([]*Event, error) {
