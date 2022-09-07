@@ -99,28 +99,39 @@ func (tc *Client) GetAccountPositions() ([]*Position, error) {
 	}
 
 	url := tc.endpoint + "/v1/accounts/" + tc.account + "/positions"
-	var result struct {
-		Positions struct {
-			Position []*Position
-		}
-	}
-	err := tc.getJSON(url, &result)
-	if err == nil {
-		return result.Positions.Position, err
-	}
 
-	// Attempt to unmarshal again, but this time with a nested struct.
-	// This is a workaround for a bug in the Tradier API.
-	var resultSingle struct {
-		Positions struct {
-			Position *Position
-		}
-	}
-	err = tc.getJSON(url, &resultSingle)
+	body, err := tc.getJSONBytes(url)
 	if err != nil {
 		return nil, err
 	}
-	return []*Position{resultSingle.Positions.Position}, nil
+
+	var (
+		resultMulti struct {
+			Positions struct {
+				Position []*Position
+			}
+		}
+		resultSingle struct {
+			Positions struct {
+				Position *Position
+			}
+		}
+	)
+
+	err = json.Unmarshal(body, &resultMulti)
+	if err == nil {
+		return resultMulti.Positions.Position, nil
+	}
+	println("failed unmarshal to multi-position struct: ", err)
+	println(string(body))
+
+	err = json.Unmarshal(body, &resultSingle)
+	if err == nil {
+		return []*Position{resultSingle.Positions.Position}, nil
+	}
+	println("failed unmarshal to single-position struct: ", err)
+	println(string(body))
+	return nil, err
 }
 
 func (tc *Client) GetAccountHistory(limit int) ([]*Event, error) {
@@ -814,6 +825,20 @@ func (tc *Client) getJSON(url string, result interface{}) error {
 
 	dec := json.NewDecoder(resp.Body)
 	return dec.Decode(result)
+}
+
+func (tc *Client) getJSONBytes(url string) ([]byte, error) {
+	resp, err := tc.do("GET", url, nil, tc.retryLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, errors.New(resp.Status + ": " + string(body))
+	}
+
+	return io.ReadAll(resp.Body)
 }
 
 func (tc *Client) do(method, url string, body url.Values, maxRetries int) (*http.Response, error) {
