@@ -1,6 +1,7 @@
 package tradier
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -105,6 +106,11 @@ func (tc *Client) GetAccountPositions() ([]*Position, error) {
 		return nil, err
 	}
 
+	if bytes.Equal(body, []byte(`{"positions":"null"}`)) {
+		println(`got "null" string, returning empty slice`)
+		return nil, nil
+	}
+
 	var (
 		resultMulti struct {
 			Positions struct {
@@ -131,6 +137,7 @@ func (tc *Client) GetAccountPositions() ([]*Position, error) {
 	}
 	println("failed unmarshal to single-position struct: ", err)
 	println(string(body))
+
 	return nil, err
 }
 
