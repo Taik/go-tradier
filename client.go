@@ -792,6 +792,42 @@ func (tc *Client) GetDividends(symbols []string) (GetDividendsResponse, error) {
 	return result, err
 }
 
+// CreateAccountEventsSession creates a streaming session for account events.
+// Returns the WebSocket URL and session ID needed to establish a streaming connection.
+// https://documentation.tradier.com/brokerage-api/streaming/create-account-session
+func (tc *Client) CreateAccountEventsSession() (string, string, error) {
+	if tc.account == "" {
+		return "", "", ErrNoAccountSelected
+	}
+
+	url := tc.endpoint + "/v1/accounts/events/session"
+
+	createSessionResp, err := tc.do("POST", url, nil, tc.retryLimit)
+	if err != nil {
+		return "", "", err
+	}
+	defer createSessionResp.Body.Close()
+
+	if createSessionResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(createSessionResp.Body)
+		return "", "", errors.New(createSessionResp.Status + ": " + string(body))
+	}
+
+	dec := json.NewDecoder(createSessionResp.Body)
+	var sessionResp struct {
+		Stream struct {
+			Url       string `json:"url"`
+			SessionId string `json:"sessionid"`
+		}
+	}
+	err = dec.Decode(&sessionResp)
+	if err != nil {
+		return "", "", err
+	}
+
+	return sessionResp.Stream.Url, sessionResp.Stream.SessionId, nil
+}
+
 // Get corporate ratios.
 func (tc *Client) GetRatios(symbols []string) (GetRatiosResponse, error) {
 	params := "?symbols=" + strings.Join(symbols, ",")
