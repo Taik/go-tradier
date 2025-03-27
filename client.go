@@ -828,6 +828,39 @@ func (tc *Client) CreateAccountEventsSession() (string, string, error) {
 	return sessionResp.Stream.Url, sessionResp.Stream.SessionId, nil
 }
 
+// CreateMarketEventsSession creates a streaming session for market events.
+// Returns the WebSocket URL and session ID needed to establish a streaming connection.
+// The session ID will be valid for 5 minutes.
+// https://documentation.tradier.com/brokerage-api/streaming/create-market-session
+func (tc *Client) CreateMarketEventsSession() (string, string, error) {
+	url := tc.endpoint + "/v1/markets/events/session"
+
+	createSessionResp, err := tc.do("POST", url, nil, tc.retryLimit)
+	if err != nil {
+		return "", "", err
+	}
+	defer createSessionResp.Body.Close()
+
+	if createSessionResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(createSessionResp.Body)
+		return "", "", errors.New(createSessionResp.Status + ": " + string(body))
+	}
+
+	dec := json.NewDecoder(createSessionResp.Body)
+	var sessionResp struct {
+		Stream struct {
+			Url       string `json:"url"`
+			SessionId string `json:"sessionid"`
+		}
+	}
+	err = dec.Decode(&sessionResp)
+	if err != nil {
+		return "", "", err
+	}
+
+	return sessionResp.Stream.Url, sessionResp.Stream.SessionId, nil
+}
+
 // Get corporate ratios.
 func (tc *Client) GetRatios(symbols []string) (GetRatiosResponse, error) {
 	params := "?symbols=" + strings.Join(symbols, ",")
